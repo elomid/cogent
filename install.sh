@@ -18,6 +18,8 @@ if [ ! -f "$here/skills/cogent/SKILL.md" ]; then
   here="${COGENT_HOME:-$HOME/.cogent}"
   if [ -d "$here/.git" ]; then
     git -C "$here" pull --quiet --ff-only
+  elif [ -e "$here" ]; then
+    echo "$here already exists and isn't a Cogent checkout. Move it aside, or set COGENT_HOME to another folder, and run this again."; exit 1
   else
     git clone --quiet --depth 1 "$repo_url" "$here"
   fi

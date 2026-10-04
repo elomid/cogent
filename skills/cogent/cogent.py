@@ -36,7 +36,7 @@ HERE = Path(__file__).resolve().parent
 LAYER = HERE / "layer.js"
 TAG = '<script src="/__cogent/layer.js" defer></script>'
 PERSON = "you"
-STATE = Path.home() / ".cogent" / "server.json"   # the background server started by `open`
+STATE = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state") / "cogent" / "server.json"   # the background server started by `open`; kept out of ~/.cogent, where install.sh clones
 PORT = 4300
 
 
@@ -291,7 +291,7 @@ def serve(root: Path, port: int, state: bool = False):
         raise SystemExit(f"No free port from {port} to {port + 19}")
     print(f"Cogent: serving {Handler.root} at http://localhost:{p}/", flush=True)
     if state:
-        STATE.parent.mkdir(exist_ok=True)
+        STATE.parent.mkdir(parents=True, exist_ok=True)
         STATE.write_text(json.dumps({"port": p, "pid": os.getpid(), "root": str(Handler.root)}))
     try:
         httpd.serve_forever()
@@ -321,7 +321,7 @@ def ensure_server():
     if st:
         return st
     log = STATE.parent / "server.log"
-    STATE.parent.mkdir(exist_ok=True)
+    STATE.parent.mkdir(parents=True, exist_ok=True)
     subprocess.Popen([sys.executable, str(Path(__file__).resolve()), "serve", str(Path.home()), "--port", str(PORT), "--state"],
                      stdout=open(log, "a"), stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, start_new_session=True)
     for _ in range(50):
