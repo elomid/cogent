@@ -1,13 +1,17 @@
 ---
 name: cogent
 description: "Local HTML pages the user can comment on, element by element, with any agent (Claude, Codex) reading the same comments. Use this instead of publishing an Artifact whenever the user asks for an HTML page, web page, prototype, mockup, design options or exploration page, report or companion page, unless they ask for an Artifact by name or want to share the page with other people: write it as a local file and hand it over as a Cogent URL from `cogent open`, never a bare file path. Also use when the user says \"read my comments\", \"see my comments\", \"check the comments\", or refers to comments or pins on a page."
+compatibility: Requires python3. Runs a local server on localhost and opens pages in the browser.
+metadata:
+  author: elomid
+  homepage: https://github.com/elomid/cogent
 ---
 
 # Cogent
 
 The user comments on elements of your HTML pages in their browser. Comments are saved next to the page (`index.html` → `index.comments.json`), and you read and answer them with the `cogent.py` script in this skill's folder. Always use the script, never hand-edit the comments file: the user may be writing a comment at the same moment.
 
-Below, `cogent` means `python3 <this skill's folder>/cogent.py`.
+Below, `cogent` means `python3 <this skill's folder>/cogent.py`, where the skill's folder is the one containing this SKILL.md (in Claude Code, `${CLAUDE_SKILL_DIR}`).
 
 ## Handing over a page
 

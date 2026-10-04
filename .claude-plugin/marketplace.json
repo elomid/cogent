@@ -1,0 +1,15 @@
+{
+  "name": "cogent",
+  "description": "Comment on local HTML pages, element by element, with any coding agent",
+  "owner": { "name": "Omid Elliyoun" },
+  "plugins": [
+    {
+      "name": "cogent",
+      "source": "./",
+      "description": "Local HTML pages you can comment on, element by element, that any coding agent can read and answer.",
+      "category": "design",
+      "homepage": "https://github.com/elomid/cogent",
+      "repository": "https://github.com/elomid/cogent"
+    }
+  ]
+}
