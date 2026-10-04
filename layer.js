@@ -161,8 +161,8 @@
     .item{display:grid;grid-template-columns:22px 1fr;column-gap:8px;padding:8px;border-radius:8px;cursor:pointer}
     .item:hover{background:var(--soft)}
     .item .w{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:22px}
-    .item .x{grid-column:2;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-    .item .more{grid-column:2;margin:2px 0 0;color:var(--muted);font-size:12px}
+    .item .x{grid-column:1/-1;margin-top:4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+    .item .more{grid-column:1/-1;margin:4px 0 0;color:var(--muted);font-size:12px}
     .panel .top .tres{font-size:12px;color:var(--muted);padding:4px 8px;border-radius:6px}
     .panel .top .tres:hover,.panel .top .tres.on{background:var(--soft);color:var(--ink)}
     .item.done{opacity:.55}
