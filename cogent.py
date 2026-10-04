@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Samepage: comment on any HTML page an agent made, and let any agent read the comments.
+"""Cogent: comment on any HTML page an agent made, and let any agent read the comments.
 
-    samepage serve [DIR] [--port 4300]     serve DIR with the comment layer added to every page
-    samepage list PAGE [--all] [--json]    comments on PAGE (open ones by default)
-    samepage take PAGE ID... --as NAME     mark comments as being worked on by NAME
-    samepage reply PAGE ID TEXT --as NAME  reply to a comment (sets it to answered)
-    samepage resolve PAGE ID...            mark comments resolved (normally the person does this)
+    cogent serve [DIR] [--port 4300]     serve DIR with the comment layer added to every page
+    cogent list PAGE [--all] [--json]    comments on PAGE (open ones by default)
+    cogent take PAGE ID... --as NAME     mark comments as being worked on by NAME
+    cogent reply PAGE ID TEXT --as NAME  reply to a comment (sets it to answered)
+    cogent resolve PAGE ID...            mark comments resolved (normally the person does this)
 
 PAGE is the HTML file on disk. Comments live next to it: index.html -> index.comments.json.
 No dependencies beyond the Python standard library.
@@ -29,7 +29,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 LAYER = HERE / "layer.js"
-TAG = '<script src="/__samepage/layer.js" defer></script>'
+TAG = '<script src="/__cogent/layer.js" defer></script>'
 PERSON = "you"
 
 
@@ -42,7 +42,7 @@ def comments_path(page: Path) -> Path:
 @contextlib.contextmanager
 def locked(page: Path):
     key = hashlib.sha1(str(comments_path(page)).encode()).hexdigest()[:16]
-    with open(Path(tempfile.gettempdir()) / f"samepage-{key}.lock", "w") as fh:
+    with open(Path(tempfile.gettempdir()) / f"cogent-{key}.lock", "w") as fh:
         fcntl.flock(fh, fcntl.LOCK_EX)
         try:
             yield
@@ -65,9 +65,9 @@ def save(page: Path, data: dict) -> None:
 
 
 def person() -> str:
-    """The person's name on their comments: $SAMEPAGE_NAME, else the first name in git config, else the login."""
-    if os.environ.get("SAMEPAGE_NAME"):
-        return os.environ["SAMEPAGE_NAME"]
+    """The person's name on their comments: $COGENT_NAME, else the first name in git config, else the login."""
+    if os.environ.get("COGENT_NAME"):
+        return os.environ["COGENT_NAME"]
     try:
         name = subprocess.run(["git", "config", "--global", "user.name"], capture_output=True, text=True).stdout.strip()
         if name:
@@ -143,7 +143,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     root: Path = Path(".")
 
     def log_message(self, fmt, *args):
-        if not self.path.startswith("/__samepage/api/state"):
+        if not self.path.startswith("/__cogent/api/state"):
             sys.stderr.write("%s\n" % (fmt % args))
 
     def end_headers(self):
@@ -170,7 +170,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
         url = urllib.parse.urlparse(self.path)
         q = urllib.parse.parse_qs(url.query)
-        if url.path == "/__samepage/layer.js":
+        if url.path == "/__cogent/layer.js":
             body = LAYER.read_bytes()
             self.send_response(200)
             self.send_header("Content-Type", "text/javascript; charset=utf-8")
@@ -178,7 +178,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
             return
-        if url.path in ("/__samepage/api/comments", "/__samepage/api/state"):
+        if url.path in ("/__cogent/api/comments", "/__cogent/api/state"):
             try:
                 page = self.page_for(q.get("page", ["/"])[0])
             except ValueError as e:
@@ -211,7 +211,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         return super().do_GET()
 
     def do_POST(self):
-        if self.path != "/__samepage/api/comments":
+        if self.path != "/__cogent/api/comments":
             return self.send_error(404)
         req = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
         try:
@@ -272,7 +272,7 @@ def serve(root: Path, port: int):
             continue
     else:
         raise SystemExit(f"No free port from {port} to {port + 19}")
-    print(f"Samepage: serving {Handler.root} at http://localhost:{p}/", flush=True)
+    print(f"Cogent: serving {Handler.root} at http://localhost:{p}/", flush=True)
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
@@ -303,7 +303,7 @@ def describe(c: dict) -> str:
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(prog="samepage", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(prog="cogent", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("serve"); s.add_argument("dir", nargs="?", default="."); s.add_argument("--port", type=int, default=4300)
     s = sub.add_parser("list"); s.add_argument("page"); s.add_argument("--all", action="store_true"); s.add_argument("--json", action="store_true")

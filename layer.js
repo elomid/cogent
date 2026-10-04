@@ -1,9 +1,9 @@
-// Samepage comment layer. Added to every page by `samepage serve`; it never edits the page.
+// Cogent comment layer. Added to every page by `cogent serve`; it never edits the page.
 (() => {
-  if (window.__samepage) return;
-  window.__samepage = true;
+  if (window.__cogent) return;
+  window.__cogent = true;
 
-  const API = "/__samepage/api";
+  const API = "/__cogent/api";
   const PAGE_PATH = location.pathname;
   let comments = [];
   let user = "you";
@@ -31,7 +31,7 @@
   };
 
   // ---------- host ----------
-  const host = document.createElement("samepage-layer");
+  const host = document.createElement("cogent-layer");
   const root = host.attachShadow({ mode: "open" });
   root.innerHTML = `<style>
     :host{all:initial;position:fixed;inset:0;pointer-events:none;z-index:2147483647;
@@ -182,7 +182,7 @@
   const HL = typeof CSS !== "undefined" && CSS.highlights && typeof Highlight === "function";
   if (HL) {
     const st = document.createElement("style");
-    st.textContent = "::highlight(samepage){background:rgba(255,196,0,.28)}::highlight(samepage-on){background:rgba(255,184,0,.55)}";
+    st.textContent = "::highlight(cogent){background:rgba(255,196,0,.28)}::highlight(cogent-on){background:rgba(255,184,0,.55)}";
     document.head.appendChild(st);
   }
 
@@ -388,8 +388,8 @@
       const rg = el && c.target.selection && rangeFor(el, c.target.selection);
       if (rg) (c.id === openThread || c.id === peek ? on : all).push(rg);
     }
-    CSS.highlights.set("samepage", new Highlight(...all));
-    CSS.highlights.set("samepage-on", new Highlight(...on));
+    CSS.highlights.set("cogent", new Highlight(...all));
+    CSS.highlights.set("cogent-on", new Highlight(...on));
   }
   const pinEls = new Map();  // id -> pin element, kept across renders so hover and motion survive scrolling
   const workingRow = (who, small) => `<div class="wrow${small ? " small" : ""}" style="--work:${colorOf(who)}"><span class="wdot" style="background:${colorOf(who)}">${esc(initial(who))}</span>` +
@@ -571,7 +571,7 @@
     alsosEl.innerHTML = "";
     if (!composer) return;
     const { el, target } = composer;
-    if (target.selection && HL) { const rg = rangeFor(el, target.selection); CSS.highlights.set("samepage-on", rg ? new Highlight(rg) : new Highlight()); }
+    if (target.selection && HL) { const rg = rangeFor(el, target.selection); CSS.highlights.set("cogent-on", rg ? new Highlight(rg) : new Highlight()); }
     else showBox(hl, el);
     for (const a of composer.alsoEls) { const b = document.createElement("div"); b.className = "hl also"; alsosEl.appendChild(b); showBox(b, a); }
     const card = document.createElement("div");
@@ -742,7 +742,7 @@
   addEventListener("resize", follow);
 
   // ---------- live: reload when the page is rebuilt, refresh when comments change ----------
-  const KEY = "samepage:scroll:" + PAGE_PATH;
+  const KEY = "cogent:scroll:" + PAGE_PATH;
   try { const y = sessionStorage.getItem(KEY); if (y) { sessionStorage.removeItem(KEY); requestAnimationFrame(() => scrollTo(0, +y)); } } catch (e) {}
   let seen = null;
   const poll = async () => {
