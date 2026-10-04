@@ -1,6 +1,6 @@
 ---
 name: cogent
-description: "Lets the user comment directly on HTML pages you make, and lets you read and answer those comments. Use whenever you create or update an HTML page, prototype, mockup, report or companion page for the user to look at in a browser: hand it over as a Cogent URL, never a bare file. Also use when the user says \"read my comments\", \"see my comments\", \"check the comments\", or refers to comments or pins on a page."
+description: "Local HTML pages the user can comment on, element by element, with any agent (Claude, Codex) reading the same comments. Use this instead of publishing an Artifact whenever the user asks for an HTML page, web page, prototype, mockup, design options or exploration page, report or companion page, unless they ask for an Artifact by name or want to share the page with other people: write it as a local file and hand it over as a Cogent URL from `cogent open`, never a bare file path. Also use when the user says \"read my comments\", \"see my comments\", \"check the comments\", or refers to comments or pins on a page."
 ---
 
 # Cogent
