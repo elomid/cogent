@@ -124,11 +124,19 @@
     .menu button{display:flex;align-items:center;gap:10px;width:100%;padding:7px 9px;border-radius:6px;font-size:13px;text-align:left}
     .menu button:hover{background:var(--soft)}
     .menu .del{color:var(--danger)}
+    /* deleting asks first, inside the menu: what goes, then Cancel or Delete */
+    .menu.ask{min-width:216px}
+    .menu .q{padding:6px 9px 8px;font-weight:500}
+    .menu .yn{display:flex;gap:6px}
+    .menu .yn button{flex:1;justify-content:center;height:28px;padding:0 10px;border-radius:7px;font-weight:500}
+    .menu .yn .no{background:var(--soft)}
+    .menu .yn .yes,.menu .yn .yes:hover{background:var(--danger);color:#fff}
+    .menu .yn .yes:hover{filter:brightness(1.08)}
     .more{color:var(--muted);font-size:12px;margin:-4px 0 8px 30px}
     .field{border:1px solid var(--line);border-radius:8px;padding:6px 6px 6px 10px;display:flex;align-items:flex-end;gap:6px}
     .field:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
     .compose .field{border:0;padding:0;box-shadow:none}
-    textarea{flex:1;min-width:0;border:0;outline:none;resize:none;background:none;font:inherit;color:inherit;padding:2px 0;height:22px;max-height:160px;overflow:hidden;display:block}
+    textarea{flex:1;min-width:0;border:0;outline:none;resize:none;background:none;font:inherit;line-height:18px;color:inherit;padding:4px 0;height:26px;max-height:160px;overflow:hidden;display:block}
     textarea::placeholder{color:var(--faint)}
     .send{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;background:var(--soft);color:var(--ink);flex:none}
     .send:hover{background:var(--line)}
@@ -236,6 +244,14 @@
     const t = text(el);
     return el.tagName.toLowerCase() + (cls ? "." + cls : "") + (t ? ` "${t.slice(0, 40)}${t.length > 40 ? "…" : ""}"` : "");
   };
+  // What a person would call the element: its first line of text ("AI cleanup", not the whole row).
+  const labelOf = (el) => {
+    const tg = el.tagName.toLowerCase();
+    if (tg === "img") return el.alt || "Image";
+    if (tg === "svg") return "Icon";
+    const l = ((el.innerText ?? text(el)) || "").split("\n").map((x) => x.trim()).find(Boolean) || "";
+    return l.length > 80 ? l.slice(0, 77).trim() + "…" : l;
+  };
   // The nearest heading before the element: what a person would call "where" on an unnamed page.
   const HEADS = "h1,h2,h3,h4,h5,h6,[role=heading]";
   const headingOf = (el) => {
@@ -266,6 +282,7 @@
       path: anchor === el ? notePath(el.parentElement) : notePath(el),
       location: headingOf(el),
       name: nameOf(el),
+      label: labelOf(el),
       css: anchor === el ? "" : cssFrom(anchor, el),
       tag: el.tagName.toLowerCase(),
       text: text(el).slice(0, 300),
@@ -361,15 +378,16 @@
     return t.location || t.name;
   };
   // What you're commenting on, then where it is: "Set Up…" · Ask and AI cleanup as optional steps
+  // The anchor names in path are for the agent; people see the element's first line and the heading it's under.
   const whatOf = (t) => {
-    if (t.css === "" && t.anchor) return t.name;
     if (t.tag === "svg") return "Icon";
     if (t.tag === "img") return "Image";
-    if (!t.text) return t.tag;
-    return "“" + (t.text.length > 48 ? t.text.slice(0, 45).trim() + "…" : t.text) + "”";
+    const l = t.label || t.text;  // comments from before labels: their text, cut short
+    if (!l) return t.tag;
+    return "“" + (l.length > 48 ? l.slice(0, 45).trim() + "…" : l) + "”";
   };
-  const placeOf = (t) => (t.path && t.path.length ? t.path.join(" › ") : t.location) || "";
-  const sameAsPlace = (t) => t.text && t.location && t.text.slice(0, 80) === t.location;
+  const placeOf = (t) => t.location || "";
+  const sameAsPlace = (t) => { const l = t.label || t.text; return l && t.location && l.slice(0, 80) === t.location; };
   const whereHTML = (t) => sameAsPlace(t) ? `<span class="what">${esc(t.location)}</span>`
     : `<span class="what">${esc(whatOf(t))}</span>${placeOf(t) ? ` · ${esc(placeOf(t))}` : ""}`;
   const whereText = (t) => sameAsPlace(t) ? t.location : whatOf(t) + (placeOf(t) ? " · " + placeOf(t) : "");
@@ -395,6 +413,7 @@
   // ---------- rendering ----------
   function render() {
     located = new Map(comments.map((c) => [c.id, locate(c.target)]));
+    for (const c of comments) { const el = located.get(c.id); if (el && !c.target.label) c.target.label = labelOf(el); }  // older comments
     const n = unresolved().length;
     const count = $(".count");
     count.innerHTML = `<b>${n}</b> ${n === 1 ? "comment" : "comments"}`;
@@ -494,7 +513,7 @@
   const msgHTML = (m, acts = "") => `<div class="msg">${avatar(m.by)}
     <div class="who"><b>${esc(display(m.by))}</b><time>${ago(m.at)}</time></div>${acts ? `<div class="acts">${acts}</div>` : "<div></div>"}
     <div class="txt">${esc(m.text)}${m.edited ? ' <span class="ed">(edited)</span>' : ""}</div></div>`;
-  const grow = (ta) => { ta.style.height = "22px"; ta.style.height = Math.min(160, ta.scrollHeight) + "px"; ta.style.overflowY = ta.scrollHeight > 160 ? "auto" : "hidden"; };
+  const grow = (ta) => { ta.style.height = "26px"; ta.style.height = Math.min(160, ta.scrollHeight) + "px"; ta.style.overflowY = ta.scrollHeight > 160 ? "auto" : "hidden"; };
 
   function renderThread() {
     root.querySelectorAll(".card.thread").forEach((n) => n.remove());
@@ -508,8 +527,12 @@
     const acts = `<button class="ic res" data-tip="${resolved ? "Reopen" : "Resolve"}">${resolved ? I.undo : I.check}</button>
       <button class="ic dots${menuOpen ? " on" : ""}" data-tip="More">${I.more}</button>
       ${inPanel ? "" : `<button class="ic x" data-tip="Close">${I.close}</button>`}`;
-    const menu = menuOpen ? `<div class="menu">${mineIdx >= 0 ? `<button class="edit">${I.pencil}Edit</button>` : ""}
-      <button class="del">${I.trash}${confirmDelete ? "Click again to delete" : "Delete thread"}</button></div>` : "";
+    const replies = c.thread.length - 1;
+    const menu = !menuOpen ? "" : confirmDelete
+      ? `<div class="menu ask"><div class="q">${replies ? `Delete thread and ${replies} ${replies === 1 ? "reply" : "replies"}?` : "Delete this comment?"}</div>
+        <div class="yn"><button class="no">Cancel</button><button class="yes">Delete</button></div></div>`
+      : `<div class="menu">${mineIdx >= 0 ? `<button class="edit">${I.pencil}Edit</button>` : ""}
+        <button class="del">${I.trash}Delete thread</button></div>`;
     const msgs = c.thread.map((m, i) => {
       if (editing && i === mineIdx) return `<div class="msg">${avatar(m.by)}<div class="who"><b>${esc(display(m.by))}</b></div><div></div>
         <div class="txt"><div class="field"><textarea class="edit-ta" rows="1">${esc(m.text)}</textarea></div>
@@ -544,10 +567,10 @@
     const ed = card.querySelector(".menu .edit");
     if (ed) ed.onclick = () => { menuOpen = false; editing = true; renderThread(); const e2 = root.querySelector(".edit-ta"); if (e2) { grow(e2); e2.focus(); e2.setSelectionRange(e2.value.length, e2.value.length); } };
     const del = card.querySelector(".menu .del");
-    if (del) del.onclick = async () => {
-      if (!confirmDelete) { confirmDelete = true; renderThread(); return; }
-      await api({ action: "delete", id: c.id }); close(); await load();
-    };
+    if (del) del.onclick = () => { confirmDelete = true; renderThread(); const no = root.querySelector(".menu .no"); if (no) no.focus(); };
+    const no = card.querySelector(".menu .no"), yes = card.querySelector(".menu .yes");
+    if (no) no.onclick = () => { menuOpen = false; confirmDelete = false; renderThread(); };
+    if (yes) yes.onclick = async () => { await api({ action: "delete", id: c.id }); close(); await load(); };
     const eta = card.querySelector(".edit-ta");
     if (eta) {
       eta.oninput = () => grow(eta);
@@ -641,7 +664,7 @@
     const placeLine = target.selection ? (placeOf(target) && placeOf(target) !== target.selection ? esc(placeOf(target)) : "") : whereHTML(target);
     card.innerHTML = `${placeLine ? `<div class="where">${placeLine}</div>` : ""}
       ${target.selection ? `<div class="quote">${esc(target.selection)}</div>` : ""}
-      ${composer.alsoEls.map((a) => `<div class="where" style="margin-top:-4px">+ ${esc(nameOf(a))}</div>`).join("")}
+      ${composer.alsoEls.map((a) => `<div class="where" style="margin-top:-4px">+ ${esc(labelOf(a) || a.tagName.toLowerCase())}</div>`).join("")}
       <div class="field"><textarea rows="1" placeholder="Add a comment"></textarea><button class="send" disabled data-tip="Add comment ↵">${I.up}</button></div>`;
     root.appendChild(card);
     const p = composerSpot();
@@ -703,7 +726,7 @@
     const t = targetEl();
     if (!t) return hideBox();
     showBox(hl, t);
-    tag.textContent = [...notePath(t.dataset && t.dataset.note ? t.parentElement : t), nameOf(t)].join(" › ");
+    tag.textContent = labelOf(t) || t.tagName.toLowerCase();
     const r = t.getBoundingClientRect();
     Object.assign(tag.style, { display: "block", left: Math.max(4, r.left) + "px", top: (r.top > 24 ? r.top - 22 : r.bottom + 4) + "px" });
   };
