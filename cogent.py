@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """Cogent: comment on any HTML page an agent made, and let any agent read the comments.
 
-    cogent serve [DIR] [--port 4300]     serve DIR with the comment layer added to every page
+    cogent open PAGE                     print a URL for PAGE with the comment layer (starts the server if needed)
+    cogent stop                          stop the background server
+    cogent serve [DIR] [--port 4300]     serve one folder in the foreground instead
     cogent list PAGE [--all] [--json]    comments on PAGE (open ones by default)
     cogent take PAGE ID... --as NAME     mark comments as being worked on by NAME
     cogent reply PAGE ID TEXT --as NAME  reply to a comment (sets it to answered)
     cogent resolve PAGE ID...            mark comments resolved (normally the person does this)
 
-PAGE is the HTML file on disk. Comments live next to it: index.html -> index.comments.json.
+PAGE is the HTML file on disk, or its Cogent URL. Comments live next to it: index.html -> index.comments.json.
 No dependencies beyond the Python standard library.
 """
 
@@ -20,17 +22,22 @@ import hashlib
 import http.server
 import json
 import os
+import signal
 import socketserver
 import subprocess
 import sys
 import tempfile
+import time
 import urllib.parse
+import urllib.request
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 LAYER = HERE / "layer.js"
 TAG = '<script src="/__cogent/layer.js" defer></script>'
 PERSON = "you"
+STATE = Path.home() / ".cogent" / "server.json"   # the background server started by `open`
+PORT = 4300
 
 
 # ---------- the comments file ----------
@@ -152,12 +159,18 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
     def page_for(self, url_path: str) -> Path:
         rel = urllib.parse.unquote(url_path).lstrip("/")
+        if any(part.startswith(".") for part in rel.split("/")):
+            raise ValueError("hidden paths are not served")
         p = (self.root / rel).resolve()
         if self.root not in p.parents and p != self.root:
             raise ValueError("outside the served folder")
         if p.is_dir():
             p = p / "index.html"
         return p
+
+    def list_directory(self, path):
+        self.send_error(404, "No folder listings")
+        return None
 
     def send_json(self, obj, code=200):
         body = json.dumps(obj, ensure_ascii=False).encode()
@@ -170,6 +183,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
         url = urllib.parse.urlparse(self.path)
         q = urllib.parse.parse_qs(url.query)
+        if url.path == "/__cogent/api/ping":
+            return self.send_json({"cogent": True, "root": str(self.root)})
+        if any(part.startswith(".") for part in urllib.parse.unquote(url.path).split("/") if part != "__cogent"):
+            return self.send_error(404)
         if url.path == "/__cogent/layer.js":
             body = LAYER.read_bytes()
             self.send_response(200)
@@ -259,7 +276,7 @@ class Server(socketserver.ThreadingMixIn, http.server.HTTPServer):
     allow_reuse_address = True
 
 
-def serve(root: Path, port: int):
+def serve(root: Path, port: int, state: bool = False):
     global PERSON
     PERSON = person()
     Handler.root = root.resolve()
@@ -273,10 +290,68 @@ def serve(root: Path, port: int):
     else:
         raise SystemExit(f"No free port from {port} to {port + 19}")
     print(f"Cogent: serving {Handler.root} at http://localhost:{p}/", flush=True)
+    if state:
+        STATE.parent.mkdir(exist_ok=True)
+        STATE.write_text(json.dumps({"port": p, "pid": os.getpid(), "root": str(Handler.root)}))
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
         pass
+    finally:
+        if state and STATE.exists() and json.loads(STATE.read_text()).get("pid") == os.getpid():
+            STATE.unlink()
+
+
+# ---------- the background server ----------
+
+def running():
+    """The background server's state, if it's up and answering."""
+    try:
+        st = json.loads(STATE.read_text())
+        with urllib.request.urlopen(f"http://127.0.0.1:{st['port']}/__cogent/api/ping", timeout=1) as r:
+            if json.load(r).get("cogent"):
+                return st
+    except Exception:
+        pass
+    return None
+
+
+def ensure_server():
+    st = running()
+    if st:
+        return st
+    log = STATE.parent / "server.log"
+    STATE.parent.mkdir(exist_ok=True)
+    subprocess.Popen([sys.executable, str(Path(__file__).resolve()), "serve", str(Path.home()), "--port", str(PORT), "--state"],
+                     stdout=open(log, "a"), stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, start_new_session=True)
+    for _ in range(50):
+        time.sleep(0.1)
+        st = running()
+        if st:
+            return st
+    raise SystemExit(f"Cogent's server didn't start; see {log}")
+
+
+def url_for(page: Path) -> str:
+    st = ensure_server()
+    root = Path(st["root"])
+    if root not in page.parents:
+        raise SystemExit(f"{page} isn't under {root}, so Cogent can't serve it")
+    rel = page.relative_to(root).as_posix()
+    if any(part.startswith(".") for part in rel.split("/")):
+        raise SystemExit(f"{page} is inside a hidden folder, which Cogent doesn't serve")
+    return f"http://localhost:{st['port']}/" + urllib.parse.quote(rel)
+
+
+def page_arg(arg: str) -> Path:
+    """A page given as a file, a folder, or its Cogent URL."""
+    if arg.startswith(("http://localhost", "http://127.0.0.1")):
+        st = running() or {"root": str(Path.home())}
+        rel = urllib.parse.unquote(urllib.parse.urlparse(arg).path).lstrip("/")
+        page = Path(st["root"]) / rel
+    else:
+        page = Path(arg).expanduser().resolve()
+    return page / "index.html" if page.is_dir() else page
 
 
 # ---------- the agent commands ----------
@@ -305,7 +380,10 @@ def describe(c: dict) -> str:
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="cogent", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
-    s = sub.add_parser("serve"); s.add_argument("dir", nargs="?", default="."); s.add_argument("--port", type=int, default=4300)
+    s = sub.add_parser("open"); s.add_argument("page")
+    sub.add_parser("stop")
+    s = sub.add_parser("serve"); s.add_argument("dir", nargs="?", default="."); s.add_argument("--port", type=int, default=PORT)
+    s.add_argument("--state", action="store_true", help=argparse.SUPPRESS)
     s = sub.add_parser("list"); s.add_argument("page"); s.add_argument("--all", action="store_true"); s.add_argument("--json", action="store_true")
     s = sub.add_parser("take"); s.add_argument("page"); s.add_argument("ids", nargs="+"); s.add_argument("--as", dest="by", required=True)
     s = sub.add_parser("reply"); s.add_argument("page"); s.add_argument("id"); s.add_argument("text"); s.add_argument("--as", dest="by", required=True)
@@ -313,10 +391,18 @@ def main(argv=None):
     a = ap.parse_args(argv)
 
     if a.cmd == "serve":
-        return serve(Path(a.dir), a.port)
-    page = Path(a.page).resolve()
-    if page.is_dir():
-        page = page / "index.html"
+        return serve(Path(a.dir), a.port, a.state)
+    if a.cmd == "stop":
+        st = running()
+        if not st:
+            return print("Cogent's server isn't running.")
+        os.kill(st["pid"], signal.SIGINT)
+        return print("Stopped Cogent's server.")
+    page = page_arg(a.page)
+    if a.cmd == "open":
+        if not page.exists():
+            raise SystemExit(f"No such page: {page}")
+        return print(url_for(page))
     if a.cmd == "list":
         cs = load(page)["comments"]
         if not a.all:
