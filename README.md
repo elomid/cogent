@@ -86,3 +86,7 @@ python3 skills/cogent/cogent.py stop              # stop the background server
 Installing Cogent gives your agent a skill that runs `skills/cogent/cogent.py`: a small Python server on `localhost` that adds the comment layer to pages it serves. It listens only on your own machine, serves files under your home folder, and never serves hidden files or folders (like `~/.ssh`) or folder listings. Skills run with your agent's permissions, so read [`skills/cogent/`](skills/cogent/) before installing, as you would any software.
 
 What agents follow is in [skills/cogent/SKILL.md](skills/cogent/SKILL.md).
+
+## License
+
+MIT. See [LICENSE](LICENSE).
