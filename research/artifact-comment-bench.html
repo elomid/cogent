@@ -1,0 +1,206 @@
+<title>Comment Test Bench</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one reading column of numbered cases; each case = a short brief, then a mock window to comment on. */
+:root {
+  --bg: #f3f4f6; --surface: #ffffff; --fg: #17181c; --muted: #646a75; --line: #e1e3e8;
+  --accent: #1f6feb; --desk: #e4e6ea; --tint: #eef3fd;
+  --sans: "Instrument Sans", -apple-system, "Helvetica Neue", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  --ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #121317; --surface: #1b1d22; --fg: #eceef2; --muted: #9aa0aa; --line: #2c2f36;
+  --accent: #5b9dff; --desk: #24262c; --tint: #1a2638; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #121317; --surface: #1b1d22; --fg: #eceef2; --muted: #9aa0aa; --line: #2c2f36;
+  --accent: #5b9dff; --desk: #24262c; --tint: #1a2638; color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font: 15px/1.55 var(--sans); }
+.page { max-width: 820px; margin: 0 auto; padding-inline: 16px; padding-block: 48px 120px; display: grid; gap: 56px; }
+header { display: grid; gap: 10px; }
+.eyebrow { font: 500 12px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+h1 { font-size: 34px; line-height: 1.1; letter-spacing: -.02em; margin: 0; text-wrap: balance; }
+.lead { color: var(--muted); margin: 0; max-width: 62ch; }
+.case { display: grid; gap: 14px; }
+.case-head { display: grid; gap: 4px; }
+.case-num { font: 500 12px/1 var(--mono); color: var(--accent); }
+h2 { font-size: 21px; line-height: 1.25; margin: 0; text-wrap: balance; }
+.brief { margin: 0; color: var(--muted); max-width: 62ch; }
+.brief code, .mono { font-family: var(--mono); font-size: 13px; }
+.desk { background: var(--desk); border-radius: 14px; padding: 20px; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 640px) { .pair { grid-template-columns: 1fr; } }
+.opt-label { font-size: 13px; font-weight: 600; margin-bottom: 8px; display: flex; gap: 8px; align-items: center; }
+.letter { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 5px; background: var(--fg); color: var(--bg); font-size: 11px; font-weight: 700; }
+/* the mock: a plain macOS-ish settings card */
+.mock { background: var(--surface); border-radius: 10px; box-shadow: 0 1px 2px rgba(0,0,0,.06), 0 0 0 .5px var(--line); font: 13px/1.4 var(--ui); overflow: hidden; }
+.mock-title { padding: 14px 16px 6px; font-weight: 700; font-size: 15px; }
+.mock-group { padding: 4px 16px 6px; font-size: 11px; color: var(--muted); font-weight: 600; }
+.row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; border-top: .5px solid var(--line); }
+.row .t { font-weight: 600; } .row .s { color: var(--muted); font-size: 12px; }
+.btn { flex: none; font: 12px/1 var(--ui); padding: 6px 10px; border-radius: 6px; border: .5px solid var(--line); background: var(--surface); color: var(--fg); cursor: pointer; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.link { color: var(--accent); padding: 10px 16px; border-top: .5px solid var(--line); }
+.say { margin: 10px 0 0; font-size: 13px; color: var(--muted); }
+.prose { background: var(--surface); border-radius: 10px; padding: 18px 20px; box-shadow: 0 0 0 .5px var(--line); }
+.prose p { margin: 0; max-width: 62ch; }
+.prose p + p { margin-top: 10px; }
+.icons { display: flex; gap: 10px; flex-wrap: wrap; }
+.icon { width: 64px; display: grid; justify-items: center; gap: 6px; padding: 12px 0; background: var(--surface); border-radius: 10px; box-shadow: 0 0 0 .5px var(--line); font: 11px var(--ui); color: var(--muted); }
+.icon svg { width: 22px; height: 22px; fill: none; stroke: var(--fg); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.callout { background: var(--tint); border-radius: 10px; padding: 14px 16px; font-size: 14px; }
+.callout b { display: block; margin-bottom: 2px; }
+ol.steps { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; counter-reset: s; }
+ol.steps li { counter-increment: s; display: flex; gap: 12px; align-items: baseline; background: var(--surface); border-radius: 8px; padding: 10px 14px; box-shadow: 0 0 0 .5px var(--line); }
+ol.steps li::before { content: counter(s); font: 500 12px var(--mono); color: var(--muted); }
+.locked { position: relative; }
+.locked-note { font: 500 11px var(--mono); color: var(--muted); margin-bottom: 8px; }
+.panel { margin-top: 12px; }
+.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+</style>
+
+<main class="page">
+  <header>
+    <div class="eyebrow">Samepage research · Artifact comments · v1</div>
+    <h1>Comment Test Bench</h1>
+    <p class="lead">Each case below is something we've hit in our own tool. Leave a comment on each case, then I'll publish a changed version and we'll see where the comments end up.</p>
+  </header>
+
+  <section class="case" id="case-1">
+    <div class="case-head">
+      <div class="case-num">Case 1</div>
+      <h2>The same label, many times</h2>
+      <p class="brief">Comment on the <b>OpenRouter Set Up…</b> button in A. In v2 its label changes and a row is added above it.</p>
+    </div>
+    <div class="desk pair">
+      <div>
+        <div class="opt-label"><span class="letter">A</span>Connections</div>
+        <div class="mock">
+          <div class="mock-title">Settings</div>
+          <div class="mock-group">AI providers</div>
+          <div class="row"><div><div class="t">Groq</div><div class="s">AI cleanup · Free</div></div><button class="btn" id="a-groq">Set Up…</button></div>
+          <div class="row"><div><div class="t">OpenRouter</div><div class="s">Ask and AI cleanup · Pay as you go</div></div><button class="btn primary" id="a-openrouter">Set Up…</button></div>
+          <div class="link">Other Provider…</div>
+        </div>
+      </div>
+      <div>
+        <div class="opt-label"><span class="letter">B</span>Features</div>
+        <div class="mock">
+          <div class="mock-title">Ask</div>
+          <div class="row"><div><div class="t">Needs an AI provider</div><div class="s">Usually under a cent a question</div></div><button class="btn primary">Set Up…</button></div>
+          <div class="row"><div><div class="t">AI cleanup</div><div class="s">Free with Groq</div></div><button class="btn">Set Up…</button></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="case" id="case-2">
+    <div class="case-head">
+      <div class="case-num">Case 2</div>
+      <h2>A card that comments as a whole</h2>
+      <p class="brief">This card is marked <code>data-comment-target</code>. Click anywhere inside it, a word or a button: the comment should land on the card.</p>
+    </div>
+    <div class="desk">
+      <div class="mock" data-comment-target>
+        <div class="mock-title">AI cleanup</div>
+        <div class="row"><div><div class="t">Groq</div><div class="s">Free and fastest. Dictation text goes from this Mac to Groq.</div></div><button class="btn primary">Turn On</button></div>
+        <div class="row"><div><div class="t">OpenRouter</div><div class="s">Uses the account Ask already has</div></div><button class="btn">Use OpenRouter</button></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="case" id="case-3">
+    <div class="case-head">
+      <div class="case-num">Case 3</div>
+      <h2>An area that refuses comments</h2>
+      <p class="brief">The left card is marked <code>data-uncommentable</code>; the right one isn't. Try both.</p>
+    </div>
+    <div class="desk pair">
+      <div class="locked" data-uncommentable>
+        <div class="locked-note">uncommentable</div>
+        <div class="mock"><div class="mock-title">Dictionary</div><div class="row"><div><div class="t">Prelto</div><div class="s">Added Sep 28</div></div><button class="btn">Edit…</button></div></div>
+      </div>
+      <div>
+        <div class="locked-note">normal</div>
+        <div class="mock"><div class="mock-title">Snippets</div><div class="row"><div><div class="t">sig</div><div class="s">Best, Omid</div></div><button class="btn">Edit…</button></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="case" id="case-4">
+    <div class="case-head">
+      <div class="case-num">Case 4</div>
+      <h2>Words you select</h2>
+      <p class="brief">Select a few words in the second sentence and comment on them. In v2 one of those words changes.</p>
+    </div>
+    <div class="prose">
+      <p>Ask answers questions about what's on your screen. Hold Right Option, ask out loud, and the answer appears in a card next to the window you were looking at.</p>
+      <p>Each question usually costs under a cent, paid to the provider you connect. Prelto never sees your key or your questions.</p>
+    </div>
+  </section>
+
+  <section class="case" id="case-5">
+    <div class="case-head">
+      <div class="case-num">Case 5</div>
+      <h2>Small icons</h2>
+      <p class="brief">Comment on the <b>Snippets</b> icon itself, not its tile. In v2 the Dictionary icon is removed, so Snippets shifts left.</p>
+    </div>
+    <div class="icons">
+      <div class="icon"><svg viewBox="0 0 14 14"><rect x="1.5" y="1.5" width="4.5" height="4.5" rx="1"/><rect x="8" y="1.5" width="4.5" height="4.5" rx="1"/><rect x="1.5" y="8" width="4.5" height="4.5" rx="1"/><rect x="8" y="8" width="4.5" height="4.5" rx="1"/></svg>Dashboard</div>
+      <div class="icon"><svg viewBox="0 0 14 14"><rect x="5" y="1.5" width="4" height="7" rx="2"/><path d="M3 7a4 4 0 0 0 8 0M7 11v1.5"/></svg>Dictation</div>
+      <div class="icon"><svg viewBox="0 0 14 14"><path d="M3 2h7a1 1 0 0 1 1 1v9H4a1 1 0 0 1-1-1Z M3 11a1 1 0 0 1 1-1h7"/></svg>Dictionary</div>
+      <div class="icon"><svg viewBox="0 0 14 14"><path d="M4.5 2.5H3v9h1.5M9.5 2.5H11v9H9.5M5.5 5.5h3M5.5 8.5h3"/></svg>Snippets</div>
+      <div class="icon"><svg viewBox="0 0 14 14"><circle cx="7" cy="7" r="2"/><path d="M7 1.5v2M7 10.5v2M1.5 7h2M10.5 7h2M3.1 3.1l1.4 1.4M9.5 9.5l1.4 1.4M3.1 10.9l1.4-1.4M9.5 4.5l1.4-1.4"/></svg>Settings</div>
+    </div>
+  </section>
+
+  <section class="case" id="case-6">
+    <div class="case-head">
+      <div class="case-num">Case 6</div>
+      <h2>Something that will be deleted</h2>
+      <p class="brief">Ask a question on this note. In v2 it's gone, with your question still unanswered.</p>
+    </div>
+    <div class="callout"><b>Privacy, said once</b>Privacy is said once, under the field where you paste a key. The footnotes under each section are removed.</div>
+  </section>
+
+  <section class="case" id="case-7">
+    <div class="case-head">
+      <div class="case-num">Case 7</div>
+      <h2>A list that gets reordered</h2>
+      <p class="brief">Comment on step 2. In v2 it moves to the end.</p>
+    </div>
+    <ol class="steps">
+      <li>Connect OpenRouter in your browser</li>
+      <li>Add credit if the account is new</li>
+      <li>Approve Prelto</li>
+      <li>Back in Prelto, the question gets answered</li>
+    </ol>
+  </section>
+
+  <section class="case" id="case-8">
+    <div class="case-head">
+      <div class="case-num">Case 8</div>
+      <h2>A state that starts hidden</h2>
+      <p class="brief">Open the panel, comment on something inside it, then close it again. Where does the comment go?</p>
+    </div>
+    <div class="desk">
+      <div class="mock">
+        <div class="row"><div><div class="t">Ask</div><div class="s">OpenRouter · Kimi K2.6</div></div><button class="btn" id="edit-ask" aria-expanded="false" aria-controls="ask-panel">Edit…</button></div>
+        <div class="panel" id="ask-panel" hidden>
+          <div class="row"><div><div class="t">Model</div><div class="s">Kimi K2.6</div></div><button class="btn">Change…</button></div>
+          <div class="row"><div><div class="t">Include the window you're looking at</div><div class="s">Sent only when you ask</div></div><button class="btn">On</button></div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+  const edit = document.getElementById("edit-ask"), panel = document.getElementById("ask-panel");
+  edit.addEventListener("click", () => {
+    panel.hidden = !panel.hidden;
+    edit.setAttribute("aria-expanded", String(!panel.hidden));
+    edit.textContent = panel.hidden ? "Edit…" : "Done";
+  });
+</script>
