@@ -153,6 +153,16 @@
     .count b{font-weight:600}
     .sep{width:1px;height:16px;background:var(--line);margin:0 3px;flex:none}
     .count.none{color:var(--faint);font-weight:500}
+    /* comment mode: the page is framed, with a notch at the top saying what a click does.
+       Square outside, rounded inside: whatever the window's corner radius, it trims the outer edge and leaves no gap. */
+    .frame{position:fixed;inset:0;overflow:hidden;pointer-events:none;opacity:0;transition:opacity .15s}
+    .frame::before{content:"";position:absolute;inset:3px;border-radius:0 0 var(--corner,0) var(--corner,0);box-shadow:0 0 0 40px var(--accent)}
+    .notch{position:absolute;top:0;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:8px;height:30px;padding:0 8px 2px 14px;
+      background:var(--accent);color:#fff;font-weight:500;border-radius:0 0 10px 10px;white-space:nowrap}
+    .notch kbd{background:rgba(255,255,255,.22);color:#fff}
+    :host(.commenting) .frame{opacity:1}
+    @media (max-width:760px){.notch .long{display:none}}  /* stay clear of the bar in a top corner */
+    @media (max-width:540px){.notch{display:none}}
     /* drag the bar by its grip; it snaps to the nearest corner */
     .grip{width:12px;height:28px;margin-right:-2px;display:grid;place-items:center;color:var(--faint);cursor:grab;touch-action:none;transition:color .15s}
     .grip svg{width:8px;fill:currentColor;stroke:none}
@@ -190,7 +200,7 @@
     .empty b{display:block;color:var(--ink);font-weight:600;margin-bottom:4px}
     .selbtn{position:fixed;pointer-events:auto;height:28px;padding:0 10px;border-radius:8px;background:var(--card);box-shadow:var(--shadow);display:none;align-items:center;gap:6px;font-weight:500}
   </style>
-  <div class="hl"></div><div class="tag"></div><div class="alsos"></div><div class="pins"></div>
+  <div class="frame"><div class="notch">Click<span class="long">&nbsp;anything</span>&nbsp;to comment<kbd>Esc</kbd></div></div><div class="hl"></div><div class="tag"></div><div class="alsos"></div><div class="pins"></div>
   <button class="selbtn">${I.comment}Comment</button>
   <div class="bar"><div class="grip" aria-hidden="true">${I.grip}</div><div class="busy"></div><button class="mode" data-tip="Comment mode">${I.comment}<kbd>C</kbd></button><span class="sep"></span><button class="count"></button></div>`;
   (document.body || document.documentElement).appendChild(host);
@@ -672,8 +682,17 @@
     if (svg) return svg;  // an icon is one thing, not its paths
     return WRAPPERS.has(el) ? null : el;
   };
+  // Pages can't read the window's corner radius: on a Mac, unless full screen, round the frame's inner bottom corners.
+  const mac = /mac/i.test((navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || "");
+  const fitCorners = () => {
+    const full = innerHeight >= screen.height - 1 && innerWidth >= screen.width - 1;
+    host.style.setProperty("--corner", mac && !full ? "19px" : "0");
+  };
+  addEventListener("resize", () => { if (mode) fitCorners(); });
   function setMode(on) {
     mode = on;
+    host.classList.toggle("commenting", on);
+    if (on) fitCorners();
     if (!on) { hideBox(); hoverBase = null; }
     else { panelOpen = false; openThread = null; resetCard(); }
     document.documentElement.style.cursor = on ? "crosshair" : "";
