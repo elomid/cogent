@@ -14,7 +14,7 @@
   let openThread = null;     // comment id shown as a full card
   let peek = null;           // comment id shown as a hover preview
   let menuOpen = false, editing = false, confirmDelete = false;
-  let panelOpen = false, showResolved = false;
+  let panelOpen = false, showResolved = false, panelThread = null, listScroll = 0;
   let pendingSel = null;     // {range, text}
   let located = new Map();   // id -> element | null
 
@@ -28,6 +28,7 @@
     pencil: '<svg viewBox="0 0 16 16"><path d="M10.5 2.5l3 3L6 13H3v-3Z"/></svg>',
     trash: '<svg viewBox="0 0 16 16"><path d="M2.5 4h11M6 4V2.5h4V4M4 4l.7 9.5h6.6L12 4"/></svg>',
     up: '<svg viewBox="0 0 16 16"><path d="M8 13V3.5M4 7.5 8 3.5l4 4"/></svg>',
+    back: '<svg viewBox="0 0 16 16"><path d="M10 3.5 5.5 8l4.5 4.5"/></svg>',
   };
 
   // ---------- host ----------
@@ -155,11 +156,15 @@
     .panel .top{display:flex;align-items:center;gap:8px;padding:12px 10px 6px 14px}
     .panel .top h3{flex:1;margin:0;font-size:14px;font-weight:600}
     .panel .list{overflow:auto;padding:0 6px 8px;scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+    /* a thread whose spot is gone takes over the panel; back returns to the list */
+    .panel .detail{overflow:auto;padding:0 6px 10px;scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+    .card.inpanel{position:static;width:auto;box-shadow:none;padding:4px 8px 2px;background:transparent}
+    .pin.s-resolved .pav{filter:grayscale(1);opacity:.65}
     textarea{scrollbar-width:thin;scrollbar-color:var(--line) transparent}
     .group{display:flex;justify-content:space-between;align-items:center;margin:10px 8px 4px;font-size:11px;font-weight:600;color:var(--muted)}
     .group button{font-weight:500;color:var(--accent)}
     .item{display:grid;grid-template-columns:22px 1fr;column-gap:8px;padding:8px;border-radius:8px;cursor:pointer}
-    .item:hover{background:var(--soft)}
+    .item:hover,.item.on{background:var(--soft)}
     .item .w{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:22px}
     .item .x{grid-column:1/-1;margin-top:4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
     .item .more{grid-column:1/-1;margin:4px 0 0;color:var(--muted);font-size:12px}
@@ -364,7 +369,7 @@
 
   // ---------- rendering ----------
   function render() {
-    located = new Map(comments.map((c) => [c.id, c.status === "resolved" ? null : locate(c.target)]));
+    located = new Map(comments.map((c) => [c.id, locate(c.target)]));
     const n = unresolved().length;
     const count = $(".count");
     count.innerHTML = `<b>${n}</b> ${n === 1 ? "comment" : "comments"}`;
@@ -384,6 +389,7 @@
     if (!HL) return;
     const all = [], on = [];
     for (const c of comments) {
+      if (c.status === "resolved" && c.id !== openThread) continue;
       const el = located.get(c.id);
       const rg = el && c.target.selection && rangeFor(el, c.target.selection);
       if (rg) (c.id === openThread || c.id === peek ? on : all).push(rg);
@@ -411,6 +417,7 @@
     if (!pinsHidden) for (const c of comments) {
       const el = located.get(c.id);
       if (!el || !visible(el)) continue;
+      if (c.status === "resolved" && c.id !== openThread) continue;  // resolved pins appear only while you look at them
       const p0 = spot(c, el);
       if (p0.y < 0 || p0.y > innerHeight + 32) continue;
       keep.add(c.id);
@@ -435,17 +442,20 @@
       const body = pinBody(cur);
       if (p.dataset.body !== body) { p.dataset.body = body; p.querySelector(".pbody").innerHTML = body; if (peek === c.id) sizePin(p, true); }
       // Tail on the spot; nudge left only if the open bubble would leave the window.
-      const w = parseFloat(p.style.width) || 32;
-      p.style.left = Math.max(4, Math.min(p0.x, innerWidth - w - 8)) + "px";
+      // The thread you opened from the panel keeps its pin beside the panel rather than under it.
+      const w = parseFloat(p.style.width) || 32, right = c.id === openThread ? edge() : innerWidth;
+      p.style.left = Math.max(4, Math.min(p0.x, right - w - 8)) + "px";
       p.style.top = p0.y - 32 + "px";
     }
     for (const [id, p] of pinEls) if (!keep.has(id)) { p.remove(); pinEls.delete(id); if (peek === id) peek = null; }
   }
   const resetCard = () => { menuOpen = false; editing = false; confirmDelete = false; };
+  const edge = () => panelOpen ? innerWidth - 352 : innerWidth;  // the panel's left side while it stays open
   const place = (card, x, y) => {
     const w = card.offsetWidth || 300, h = card.offsetHeight || 160;
     let left = x + 40;  // clear of the pin, which sits at x..x+32 with its tail on the spot
-    if (left + w > innerWidth - 8) left = Math.max(8, x - w - 8);
+    const right = edge();
+    if (left + w > right - 8) left = Math.max(8, Math.min(x, right - 40) - w - 8);  // left of the pin, which may itself be nudged off the panel
     card.style.left = left + "px";
     card.style.top = Math.max(8, Math.min(innerHeight - h - 8, y - 32)) + "px";
   };
@@ -461,14 +471,16 @@
 
   function renderThread() {
     root.querySelectorAll(".card.thread").forEach((n) => n.remove());
-    const c = comments.find((x) => x.id === openThread);
+    const inPanel = !!(panelOpen && panelThread);
+    const c = comments.find((x) => x.id === (inPanel ? panelThread : openThread));
     if (!c) return;
+    const close = inPanel ? backToList : closeThread;
     const el = located.get(c.id), t = c.target;
     const resolved = c.status === "resolved";
     const mineIdx = c.thread.map((m) => m.by).lastIndexOf(user);
     const acts = `<button class="ic res" data-tip="${resolved ? "Reopen" : "Resolve"}">${resolved ? I.undo : I.check}</button>
       <button class="ic dots${menuOpen ? " on" : ""}" data-tip="More">${I.more}</button>
-      <button class="ic x" data-tip="Close">${I.close}</button>`;
+      ${inPanel ? "" : `<button class="ic x" data-tip="Close">${I.close}</button>`}`;
     const menu = menuOpen ? `<div class="menu">${mineIdx >= 0 ? `<button class="edit">${I.pencil}Edit</button>` : ""}
       <button class="del">${I.trash}${confirmDelete ? "Click again to delete" : "Delete thread"}</button></div>` : "";
     const msgs = c.thread.map((m, i) => {
@@ -478,29 +490,36 @@
       return msgHTML(m, i === 0 ? acts : "");
     }).join("");
     const card = document.createElement("div");
-    card.className = "card thread";
+    card.className = inPanel ? "card thread inpanel" : "card thread";
     card.innerHTML = `${t.selection ? `<div class="quote">${esc(t.selection)}</div>` : `<div class="where">${whereHTML(t)}</div>`}
       ${el ? "" : `<div class="where">Not on the page anymore</div>`}
       ${msgs}${c.status === "taken" ? workingRow(c.taken_by) : ""}${menu}
       <div class="field"><textarea class="reply" rows="1" placeholder="Reply"></textarea><button class="send" disabled data-tip="Reply ↵">${I.up}</button></div>
 `;
-    root.appendChild(card);
-    placeAt(card, c);
-    if (el) showBox(hl, el);
+    if (inPanel) {
+      const host = root.querySelector(".panel .detail");
+      if (!host) return;
+      host.appendChild(card);
+    } else {
+      root.appendChild(card);
+      placeAt(card, c);
+      if (el) showBox(hl, el);
+    }
     const ta = card.querySelector(".reply"), send = card.querySelector(".send");
     ta.oninput = () => { grow(ta); send.disabled = !ta.value.trim(); };
     const go = async () => { const v = ta.value.trim(); if (!v) return; ta.value = ""; await api({ action: "reply", id: c.id, text: v }); await load(); };
     send.onclick = go;
-    ta.onkeydown = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); go(); } if (e.key === "Escape") closeThread(); };
-    card.querySelector(".x").onclick = closeThread;
-    card.querySelector(".res").onclick = async () => { await api({ action: resolved ? "reopen" : "resolve", id: c.id }); closeThread(); await load(); };
+    ta.onkeydown = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); go(); } if (e.key === "Escape") close(); };
+    const xb = card.querySelector(".x");
+    if (xb) xb.onclick = closeThread;
+    card.querySelector(".res").onclick = async () => { await api({ action: resolved ? "reopen" : "resolve", id: c.id }); close(); await load(); };
     card.querySelector(".dots").onclick = () => { menuOpen = !menuOpen; confirmDelete = false; renderThread(); };
     const ed = card.querySelector(".menu .edit");
     if (ed) ed.onclick = () => { menuOpen = false; editing = true; renderThread(); const e2 = root.querySelector(".edit-ta"); if (e2) { grow(e2); e2.focus(); e2.setSelectionRange(e2.value.length, e2.value.length); } };
     const del = card.querySelector(".menu .del");
     if (del) del.onclick = async () => {
       if (!confirmDelete) { confirmDelete = true; renderThread(); return; }
-      await api({ action: "delete", id: c.id }); closeThread(); await load();
+      await api({ action: "delete", id: c.id }); close(); await load();
     };
     const eta = card.querySelector(".edit-ta");
     if (eta) {
@@ -512,6 +531,7 @@
     }
   }
   const closeThread = () => { openThread = null; resetCard(); hideBox(); render(); };
+  const backToList = () => { panelThread = null; resetCard(); render(); };
 
   function renderPanel() {
     root.querySelectorAll(".panel").forEach((n) => n.remove());
@@ -525,7 +545,7 @@
     const done = comments.filter((c) => c.status === "resolved");
     const item = (c) => {
       const first = c.thread[0], replies = c.thread.length - 1;
-      return `<div class="item${c.status === "resolved" ? " done" : ""}" data-id="${c.id}">${avatar(first.by, "av", " s-" + c.status)}
+      return `<div class="item${c.status === "resolved" ? " done" : ""}${c.id === openThread ? " on" : ""}" data-id="${c.id}">${avatar(first.by, "av", " s-" + c.status)}
         <div class="w">${esc(c.target.selection ? "“" + c.target.selection + "”" : whereText(c.target))} · ${ago(c.thread[c.thread.length - 1].at)}</div>
         <div class="x">${esc(first.text)}</div>
         ${c.status === "taken" ? `<div class="more">${workingRow(c.taken_by, true)}</div>` : replies ? `<div class="more">${replies} ${replies === 1 ? "reply" : "replies"} · ${esc(display(lastBy(c)))}</div>` : ""}</div>`;
@@ -536,14 +556,29 @@
     if (!comments.length) html = `<div class="empty"><b>No comments yet</b>Press C, then click anything on the page.</div>`;
     else if (!onPage.length && !gone.length && !showResolved) html = `<div class="empty"><b>All resolved</b></div>`;
     const toggle = done.length ? `<button class="tres${showResolved ? " on" : ""}">${showResolved ? "Hide" : "Show"} resolved</button>` : "";
+    if (panelThread && comments.some((x) => x.id === panelThread)) {
+      panel.innerHTML = `<div class="top"><button class="ic back" data-tip="All comments">${I.back}</button><h3>Comments</h3><button class="ic x" data-tip="Close">${I.close}</button></div><div class="detail"></div>`;
+      root.appendChild(panel);
+      panel.querySelector(".back").onclick = backToList;
+      panel.querySelector(".x").onclick = () => { panelOpen = false; panelThread = null; resetCard(); render(); };
+      return;
+    }
+    panelThread = null;
     panel.innerHTML = `<div class="top"><h3>Comments</h3>${toggle}<button class="ic x" data-tip="Close">${I.close}</button></div><div class="list">${html}</div>`;
     root.appendChild(panel);
+    const list = panel.querySelector(".list");
+    list.scrollTop = listScroll;
+    list.onscroll = () => { listScroll = list.scrollTop; };
     panel.querySelector(".x").onclick = () => { panelOpen = false; render(); };
+    // Has a place on the page: go there. No place: read it in the panel. Resolved threads keep the panel open.
     panel.querySelectorAll(".item").forEach((it) => it.onclick = () => {
-      const id = it.dataset.id, el = located.get(id);
-      openThread = id; resetCard(); panelOpen = false;
-      if (el) el.scrollIntoView({ block: "center", behavior: "smooth" });
-      setTimeout(render, el ? 350 : 0);
+      const id = it.dataset.id, el = located.get(id), c = comments.find((x) => x.id === id);
+      listScroll = list.scrollTop; resetCard();
+      if (!el) { panelThread = id; openThread = null; hideBox(); render(); return; }
+      openThread = id;
+      if (c.status !== "resolved") panelOpen = false;
+      el.scrollIntoView({ block: "center", behavior: "smooth" });
+      setTimeout(render, 350);
     });
     const tr = panel.querySelector(".tres");
     if (tr) tr.onclick = () => { showResolved = !showResolved; render(); };
@@ -655,7 +690,7 @@
     const somethingOpen = openThread || panelOpen || (composer && !(mode && e.shiftKey));
     if (somethingOpen) {
       if (composer) closeComposer();
-      openThread = null; resetCard(); panelOpen = false; hideBox(); render();
+      openThread = null; resetCard(); panelOpen = false; panelThread = null; hideBox(); render();
       if (mode) { e.preventDefault(); e.stopPropagation(); if (cursor) hoverAt(cursor.x, cursor.y); }
       return;
     }
@@ -710,6 +745,7 @@
       if (composer) closeComposer();
       else if (menuOpen) { menuOpen = false; confirmDelete = false; renderThread(); }
       else if (openThread) closeThread();
+      else if (panelOpen && panelThread) backToList();
       else if (panelOpen) { panelOpen = false; render(); }
       else if (mode) setMode(false);
     }

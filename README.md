@@ -16,7 +16,7 @@ Or run this yourself:
 curl -fsSL https://raw.githubusercontent.com/elomid/cogent/main/install.sh | sh
 ```
 
-It clones Cogent to `~/.cogent` and links it for every agent it finds: Claude Code (`~/.claude/skills`), and Codex, Cursor, Gemini CLI and others (`~/.agents/skills`). Then start a new agent session. Running the same line again updates it. Needs `git` and Python 3, nothing else.
+It clones Cogent to `~/.cogent` and links it for every agent it finds: Claude Code (`~/.claude/skills`), and Codex, Cursor, Gemini CLI and others (`~/.agents/skills`). Then start a new agent session. Running the same line again updates it. Works on Mac and Linux. Needs `git` and Python 3, nothing else.
 
 <details>
 <summary>Other ways to install</summary>
