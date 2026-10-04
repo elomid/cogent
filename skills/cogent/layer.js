@@ -17,6 +17,8 @@
   let panelOpen = false, showResolved = false, panelThread = null, listScroll = 0;
   let pendingSel = null;     // {range, text}
   let located = new Map();   // id -> element | null
+  let corner = "tr";         // where the bar sits: tr, tl, br or bl; the panel opens from the same corner
+  try { const k = localStorage.getItem("cogent:corner"); if (/^[tb][lr]$/.test(k || "")) corner = k; } catch (e) {}
 
   // ---------- icons ----------
   const I = {
@@ -29,6 +31,7 @@
     trash: '<svg viewBox="0 0 16 16"><path d="M2.5 4h11M6 4V2.5h4V4M4 4l.7 9.5h6.6L12 4"/></svg>',
     up: '<svg viewBox="0 0 16 16"><path d="M8 13V3.5M4 7.5 8 3.5l4 4"/></svg>',
     back: '<svg viewBox="0 0 16 16"><path d="M10 3.5 5.5 8l4.5 4.5"/></svg>',
+    grip: '<svg viewBox="0 0 8 16"><circle cx="2.5" cy="4" r=".9"/><circle cx="5.5" cy="4" r=".9"/><circle cx="2.5" cy="8" r=".9"/><circle cx="5.5" cy="8" r=".9"/><circle cx="2.5" cy="12" r=".9"/><circle cx="5.5" cy="12" r=".9"/></svg>',
   };
 
   // ---------- host ----------
@@ -150,6 +153,18 @@
     .count b{font-weight:600}
     .sep{width:1px;height:16px;background:var(--line);margin:0 3px;flex:none}
     .count.none{color:var(--faint);font-weight:500}
+    /* drag the bar by its grip; it snaps to the nearest corner */
+    .grip{width:12px;height:28px;margin-right:-2px;display:grid;place-items:center;color:var(--faint);cursor:grab;touch-action:none;transition:color .15s}
+    .grip svg{width:8px;fill:currentColor;stroke:none}
+    .grip:hover,.bar.dragging .grip{color:var(--ink)}
+    .bar.dragging,.bar.dragging .grip{cursor:grabbing}
+    .bar.dragging{box-shadow:0 0 0 1px var(--ring),0 16px 40px rgba(0,0,0,.2)}
+    :host([data-corner$=l]) .bar{right:auto;left:12px}
+    :host([data-corner^=b]) .bar{top:auto;bottom:12px}
+    :host([data-corner^=b]) .bar [data-tip]:hover::after{top:auto;bottom:calc(100% + 8px)}
+    :host([data-corner$=l]) .panel{right:auto;left:12px}
+    :host([data-corner^=b]) .panel{top:auto;bottom:52px}
+    :host(.moving) .panel{visibility:hidden}
 
     /* the panel drops down from the bar */
     .panel{position:fixed;top:52px;right:12px;width:340px;max-height:min(70vh,640px);display:flex;flex-direction:column;background:var(--card);border-radius:12px;box-shadow:var(--shadow);pointer-events:auto;overflow:hidden}
@@ -177,7 +192,7 @@
   </style>
   <div class="hl"></div><div class="tag"></div><div class="alsos"></div><div class="pins"></div>
   <button class="selbtn">${I.comment}Comment</button>
-  <div class="bar"><div class="busy"></div><button class="mode" data-tip="Comment mode">${I.comment}<kbd>C</kbd></button><span class="sep"></span><button class="count"></button></div>`;
+  <div class="bar"><div class="grip" aria-hidden="true">${I.grip}</div><div class="busy"></div><button class="mode" data-tip="Comment mode">${I.comment}<kbd>C</kbd></button><span class="sep"></span><button class="count"></button></div>`;
   (document.body || document.documentElement).appendChild(host);
   const $ = (s) => root.querySelector(s);
   const hl = $(".hl"), tag = $(".tag"), pinsEl = $(".pins"), alsosEl = $(".alsos"), selbtn = $(".selbtn");
@@ -443,19 +458,21 @@
       if (p.dataset.body !== body) { p.dataset.body = body; p.querySelector(".pbody").innerHTML = body; if (peek === c.id) sizePin(p, true); }
       // Tail on the spot; nudge left only if the open bubble would leave the window.
       // The thread you opened from the panel keeps its pin beside the panel rather than under it.
-      const w = parseFloat(p.style.width) || 32, right = c.id === openThread ? edge() : innerWidth;
-      p.style.left = Math.max(4, Math.min(p0.x, right - w - 8)) + "px";
+      const w = parseFloat(p.style.width) || 32, [lo, hi] = c.id === openThread ? span() : [0, innerWidth];
+      p.style.left = Math.max(lo + 4, Math.min(p0.x, hi - w - 8)) + "px";
       p.style.top = p0.y - 32 + "px";
     }
     for (const [id, p] of pinEls) if (!keep.has(id)) { p.remove(); pinEls.delete(id); if (peek === id) peek = null; }
   }
   const resetCard = () => { menuOpen = false; editing = false; confirmDelete = false; };
-  const edge = () => panelOpen ? innerWidth - 352 : innerWidth;  // the panel's left side while it stays open
+  // The free width beside the panel while it stays open (it sits on the bar's side).
+  const span = () => !panelOpen ? [0, innerWidth] : corner[1] === "l" ? [352, innerWidth] : [0, innerWidth - 352];
   const place = (card, x, y) => {
     const w = card.offsetWidth || 300, h = card.offsetHeight || 160;
-    let left = x + 40;  // clear of the pin, which sits at x..x+32 with its tail on the spot
-    const right = edge();
-    if (left + w > right - 8) left = Math.max(8, Math.min(x, right - 40) - w - 8);  // left of the pin, which may itself be nudged off the panel
+    const [lo, hi] = span();
+    const px = Math.max(lo + 4, Math.min(x, hi - 40));  // the pin, nudged off the panel if it would sit under it
+    let left = px + 40;  // clear of the pin, which sits at px..px+32 with its tail on the spot
+    if (left + w > hi - 8) left = Math.max(lo + 8, px - w - 8);
     card.style.left = left + "px";
     card.style.top = Math.max(8, Math.min(innerHeight - h - 8, y - 32)) + "px";
   };
@@ -775,6 +792,38 @@
     });
   };
   addEventListener("scroll", follow, true);
+
+  // ---------- moving the bar ----------
+  host.dataset.corner = corner;
+  const bar = $(".bar"), grip = $(".grip");
+  grip.onpointerdown = (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    grip.setPointerCapture(e.pointerId);
+    const r0 = bar.getBoundingClientRect(), x0 = e.clientX, y0 = e.clientY;
+    let dx = 0, dy = 0;
+    bar.classList.add("dragging"); host.classList.add("moving");
+    grip.onpointermove = (m) => {
+      dx = Math.max(8 - r0.left, Math.min(innerWidth - 8 - r0.right, m.clientX - x0));
+      dy = Math.max(8 - r0.top, Math.min(innerHeight - 8 - r0.bottom, m.clientY - y0));
+      bar.style.transform = `translate(${dx}px,${dy}px)`;
+    };
+    grip.onpointerup = grip.onpointercancel = () => {
+      grip.onpointermove = grip.onpointerup = grip.onpointercancel = null;
+      const cx = r0.left + r0.width / 2 + dx, cy = r0.top + r0.height / 2 + dy;
+      corner = (cy < innerHeight / 2 ? "t" : "b") + (cx < innerWidth / 2 ? "l" : "r");
+      try { localStorage.setItem("cogent:corner", corner); } catch (e) {}
+      // Snap: jump to the corner, then glide from where it was let go.
+      const from = bar.getBoundingClientRect();
+      bar.style.transform = ""; host.dataset.corner = corner;
+      const to = bar.getBoundingClientRect();
+      bar.classList.remove("dragging"); host.classList.remove("moving");
+      if (!matchMedia("(prefers-reduced-motion: reduce)").matches)
+        bar.animate([{ transform: `translate(${from.left - to.left}px,${from.top - to.top}px)` }, { transform: "none" }],
+          { duration: 220, easing: "cubic-bezier(.2,.8,.2,1)" });
+      render();
+    };
+  };
   addEventListener("resize", follow);
 
   // ---------- live: reload when the page is rebuilt, refresh when comments change ----------
