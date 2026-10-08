@@ -32,12 +32,13 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
+VERSION = "2026.10.08"   # bump on every change to cogent.py or layer.js: a newer copy replaces an older running server
 HERE = Path(__file__).resolve().parent
 LAYER = HERE / "layer.js"
 TAG = '<script src="/__cogent/layer.js" defer></script>'
 PERSON = "you"
 STATE = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state") / "cogent" / "server.json"   # the background server started by `open`; kept out of ~/.cogent, where install.sh clones
-PORT = 4300
+PORT = int(os.environ.get("COGENT_PORT") or 4300)
 
 
 # ---------- the comments file ----------
@@ -184,7 +185,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         url = urllib.parse.urlparse(self.path)
         q = urllib.parse.parse_qs(url.query)
         if url.path == "/__cogent/api/ping":
-            return self.send_json({"cogent": True, "root": str(self.root)})
+            return self.send_json({"cogent": True, "root": str(self.root), "version": VERSION, "path": str(HERE), "pid": os.getpid()})
         if any(part.startswith(".") for part in urllib.parse.unquote(url.path).split("/") if part != "__cogent"):
             return self.send_error(404)
         if url.path == "/__cogent/layer.js":
@@ -305,21 +306,37 @@ def serve(root: Path, port: int, state: bool = False):
 # ---------- the background server ----------
 
 def running():
-    """The background server's state, if it's up and answering."""
+    """The background server's state, if it's up and answering, plus what it says about itself."""
     try:
         st = json.loads(STATE.read_text())
         with urllib.request.urlopen(f"http://127.0.0.1:{st['port']}/__cogent/api/ping", timeout=1) as r:
-            if json.load(r).get("cogent"):
-                return st
+            ping = json.load(r)
+            if ping.get("cogent"):
+                return {**st, **{k: ping[k] for k in ("version", "path", "pid") if k in ping}}
     except Exception:
         pass
     return None
 
 
+def version_key(v):
+    return tuple(int(x) for x in str(v or "0").split(".") if x.isdigit())
+
+
 def ensure_server():
     st = running()
-    if st:
+    if st and version_key(st.get("version")) >= version_key(VERSION):
         return st
+    if st:
+        # An older copy of Cogent (say, another agent's install) started the server; it would serve its old layer
+        # to everyone. Stop it and start ours.
+        try:
+            os.kill(st["pid"], signal.SIGINT)
+        except OSError:
+            pass
+        for _ in range(50):
+            time.sleep(0.1)
+            if not running():
+                break
     log = STATE.parent / "server.log"
     STATE.parent.mkdir(parents=True, exist_ok=True)
     subprocess.Popen([sys.executable, str(Path(__file__).resolve()), "serve", str(Path.home()), "--port", str(PORT), "--state"],
